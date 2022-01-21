@@ -1,15 +1,19 @@
-﻿// See https://aka.ms/new-console-template for more information
-using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 
+using Microsoft.Extensions.Configuration;
+
 using teams_export;
 
-var token = @"";
+IConfiguration config = new ConfigurationBuilder()
+	.AddJsonFile("appsettings.json")
+	.Build();
 
-if (string.IsNullOrWhiteSpace(token))
-	throw new Exception("You need to populate token. Go here, https://developer.microsoft.com/en-us/graph/graph-explorer, select Chat.Read permission, then copy token from test rewquest");
+var settings = config.GetRequiredSection("Settings").Get<Settings>();
+
+if (string.IsNullOrWhiteSpace(settings.Token))
+	throw new Exception("You need to provide a token. Go here, https://developer.microsoft.com/en-us/graph/graph-explorer, use beta API, use endpoint https://graph.microsoft.com/beta/chats and select Chat.Read permission, then update appsettings.json accordingly");
 
 var targetPath = @"c:\Temp";
 var targetFile = Path.Combine(targetPath, "messages.html");
@@ -22,15 +26,17 @@ System.IO.Directory.CreateDirectory(targetImageFolder);
 
 var http = new HttpClient();
 http.DefaultRequestHeaders.Add("Accept", "application/json");
-http.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+http.DefaultRequestHeaders.Add("Authorization", "Bearer " + settings.Token);
 
 var http2 = new HttpClient();
 http2.DefaultRequestHeaders.Add("Accept", "image/png");
-http2.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+http2.DefaultRequestHeaders.Add("Authorization", "Bearer " + settings.Token);
 
 var messages = new List<MessageSummary>();
 MessagesResponse result = null;
-string url = "https://graph.microsoft.com/beta/chats/19:20b2cb3d-54d7-4513-ac20-4716c2424d96_3c73dbf5-e5e0-47b4-9468-5e3567fb44ee@unq.gbl.spaces/messages";
+// go to https://teams.microsoft.com/ and grab the ID for the conversation you want
+// it will look something like: 19:20b2cb3d-54d7-4513-ac20-4716c2424d96_3c73dbf5-e5e0-47b4-9468-5e3567fb44ee@unq.gbl.spaces
+string url = $"https://graph.microsoft.com/beta/chats/{settings.MessageID}/messages";
 int ctr = 0;
 var re = new Regex(@"src=""(https:\/\/graph.microsoft.com.*?)""", RegexOptions.Compiled);
 int imageCtr = 0;
@@ -54,14 +60,10 @@ do
 		if (message.from == null)
 			continue;
 
-		//if (message.body.content.Contains("can you split that out as csv or something"))
-		//	Debugger.Break();
-
 		var isHtml = message.body.contentType == "html";
 		var massagedContent = isHtml ? message.body.content : HttpUtility.HtmlEncode(message.body.content);
 		if (isHtml)
 		{
-
 			MatchCollection matches = re.Matches(massagedContent);
 			foreach (Match match in matches)
 			{
@@ -72,7 +74,7 @@ do
 				massagedContent = massagedContent.Replace(imageUrl, relativewImagePath);
 			}
 		}
-		var summary = new MessageSummary() { Body = massagedContent, From = message.from.user.displayName, Date = message.createdDateTime };
+		var summary = new MessageSummary() { Body = massagedContent, From = message.from?.user?.displayName ?? "(unknown)", Date = message.createdDateTime };
 		messages.Add(summary);
 	}
 }

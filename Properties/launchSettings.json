@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "teams-export": {
+      "commandName": "Project"
+    }
+  }
+}
